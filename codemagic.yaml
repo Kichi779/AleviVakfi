@@ -1,0 +1,33 @@
+workflows:
+  ios-workflow:
+    name: Uluslararasi Alevi Vakfi iOS Build
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Flutter Paketlerini Yukle
+        script: |
+          flutter pub get
+      - name: iOS Yapilandirma Dosyalarini Olustur (Kritik Adim)
+        script: |
+          # Bu komut, sunucuda hata veren 'podhelper.rb' dosyasini yoktan var eder
+          flutter build ios --config-only
+      - name: CocoaPods Kurulumu (Temiz Build)
+        script: |
+          cd ios
+          # Windows'tan gelen hatali dosyalari temizliyoruz
+          rm -rf Podfile.lock Pods
+          pod install --repo-update
+          cd ..
+      - name: iOS IPA Build
+        script: |
+          # Uygulamayi release modunda derleyip çökme riskini bitiriyoruz
+          flutter build ipa --release --export-options-plist /Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
