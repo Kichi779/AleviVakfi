@@ -2,7 +2,7 @@ name: uluslararasi_alevi_vakfi
 description: "Uluslararası Alevi Vakfı mobil uygulaması"
 publish_to: 'none'
 
-version: 1.0.0+17
+version: 1.0.0+18
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
