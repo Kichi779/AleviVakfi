@@ -137,7 +137,7 @@ class _WebViewPageState extends State<WebViewPage> {
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
     // 🔥 Masaüstü kimliği ile haritanın "App Intent" (Chrome'u açma) tetiklemesini durduruyoruz.
-      ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+      ..setUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 UADE_MOBILE_APP")
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
