@@ -70,7 +70,8 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _showOneTimeWelcomeDialog() {
-    bool hasShown = box.get('hasShownWelcomeFinal', defaultValue: false);
+    // Versiyon kontrolü ile popup'ı tazeledik
+    bool hasShown = box.get('hasShownWelcomeFinalV5', defaultValue: false);
     if (!hasShown) {
       showDialog(
         context: context,
@@ -91,7 +92,7 @@ class _MainShellState extends State<MainShell> {
           actions: [
             TextButton(
               onPressed: () {
-                box.put('hasShownWelcomeFinal', true);
+                box.put('hasShownWelcomeFinalV5', true);
                 Navigator.pop(context);
               },
               child: const Text("Uygulamaya Başla", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -129,7 +130,7 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-/* ---------------- WEBVIEW (HARİTA HATASI GİZLEME) ---------------- */
+/* ---------------- WEBVIEW (GELİŞMİŞ ANTİ-CHROME KALKANI) ---------------- */
 
 class WebViewPage extends StatefulWidget {
   const WebViewPage({super.key});
@@ -146,24 +147,31 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    // Masaüstü modu Google Maps hatalarını minimize eder
-      ..setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    // 🔥 1. ÖNLEM: Kendimizi "Windows Masaüstü" olarak tanıtıyoruz.
+    // Bu sayede site "Mobile App Intent" göndermez, Chrome tetiklenmez.
+      ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() => isLoading = true),
+          onPageStarted: (_) {
+            setState(() => isLoading = true);
+            _nukeMapsEarly(); // 2. ÖNLEM: Daha sayfa başlarken harita CSS'lerini imha et.
+          },
           onPageFinished: (_) {
             setState(() => isLoading = false);
-            _applyCleanAndDarkJS(); // Haritayı gizleyen ve koyu temayı basan sihirli kod
+            _applyFinalPolishing(); // 3. ÖNLEM: Kalan kalıntıları temizle.
           },
           onNavigationRequest: (request) {
             final url = request.url.toLowerCase();
 
-            // HARİTA HATASINI SESSİZCE ENGELLE (Dışarı atma, hatayı da gösterme)
+            // 🔥 4. ÖNLEM: KARA LİSTE (Strict Prevent)
+            // Chrome'u açmaya çalışan tüm Google Maps ve API yollarını daha gitmeden kesiyoruz.
             if (url.contains("maps.google") ||
-                url.contains("googleusercontent.com") ||
-                url.contains("maps.apple.com")) {
-              log("Harita hatası veya linki sessizce engellendi.");
-              return NavigationDecision.prevent;
+                url.contains("googleusercontent.com/maps") ||
+                url.contains("maps.apple.com") ||
+                url.contains("googleapis.com") ||
+                url.contains("gstatic.com")) {
+              log("DIŞARI ATMA GİRİŞİMİ SESSİZCE ENGELLENDİ: $url");
+              return NavigationDecision.prevent; // Asla Chrome'a gitme!
             }
 
             // Vakıf dışı diğer her şeyi (Sosyal Medya vb) dış tarayıcıda aç
@@ -178,19 +186,30 @@ class _WebViewPageState extends State<WebViewPage> {
       ..loadRequest(Uri.parse("https://www.alevi-vakfi.com/"));
   }
 
-  void _applyCleanAndDarkJS() {
-    final isDark = Hive.box('settings').get('isDarkTheme', defaultValue: false);
+  // Sayfa daha render edilmeden harita alanlarını "display: none" yapar.
+  void _nukeMapsEarly() {
+    controller.runJavaScript("""
+      var style = document.createElement('style');
+      style.innerHTML = 'iframe[src*="maps"], .google-maps, #map, [id*="map"], [class*="map"], .gm-err-container, .gm-err-content { display: none !important; visibility: hidden !important; height: 0 !important; }';
+      document.head.appendChild(style);
+    """);
+  }
 
-    // JS: Iframe harita hatalarını komple siler, hatayı göstermez.
+  void _applyFinalPolishing() {
+    final isDark = Hive.box('settings').get('isDarkTheme', defaultValue: false);
+    // Koyu tema ve ekstra temizlik enjeksiyonu
     String jsCode = """
       (function() {
-        var style = document.createElement('style');
-        style.innerHTML = 'iframe[src*="maps.google.com"], .google-maps, #map, [id*="map"], [class*="map"], .gm-err-container { display: none !important; }';
-        document.head.appendChild(style);
-
         if ($isDark) {
           document.body.style.background = '#121212';
           document.body.style.color = 'white';
+        }
+        // Sayfadaki tüm scriptleri tarayıp Maps olanları durdurmayı dene
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+          if (scripts[i].src.indexOf('maps.googleapis.com') > -1) {
+            scripts[i].parentNode.removeChild(scripts[i]);
+          }
         }
       })();
     """;
