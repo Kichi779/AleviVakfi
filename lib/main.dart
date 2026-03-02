@@ -151,11 +151,11 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   final _pages = [
-    const NewsPage(),     // Duyurular
-    const FavoritesPage(),// Favoriler
-    const WebViewPage(),  // TAM ORTA: Vakıf Web
-    const EventsPage(),   // Takvim
-    const SettingsPage(), // Ayarlar
+    const NewsPage(),      // Duyurular
+    const FavoritesPage(), // Favoriler
+    const WebViewPage(),   // TAM ORTA: Vakıf Web
+    const EventsPage(),    // Takvim
+    const SettingsPage(),  // Ayarlar
   ];
 
   @override
@@ -278,7 +278,7 @@ class _NewsPageState extends State<NewsPage> {
   }
 }
 
-/* ---------------- HABER DETAY (KARAKTER FIX) ---------------- */
+/* ---------------- HABER DETAY (KARAKTER FIX VE IOS SHARE FIX) ---------------- */
 
 class PostDetailPage extends StatefulWidget {
   final dynamic post;
@@ -295,11 +295,30 @@ class _PostDetailPageState extends State<PostDetailPage> {
   Widget build(BuildContext context) {
     final String title = fixEncoding(widget.post['title']['rendered']);
     final String content = fixEncoding(widget.post['content']['rendered']);
+    final String link = widget.post['link'] ?? "https://www.alevi-vakfi.com/";
 
     return Scaffold(
       appBar: AppBar(actions: [
-        IconButton(icon: Icon(isFav ? Icons.bookmark : Icons.bookmark_border), onPressed: () => setState(() { isFav ? favBox.delete(widget.post['id']) : favBox.put(widget.post['id'], widget.post); })),
-        IconButton(icon: const Icon(Icons.share), onPressed: () => Share.share("$title\n\n${widget.post['link']}")),
+        IconButton(
+            icon: Icon(isFav ? Icons.bookmark : Icons.bookmark_border),
+            onPressed: () => setState(() {
+              isFav ? favBox.delete(widget.post['id']) : favBox.put(widget.post['id'], widget.post);
+            })
+        ),
+        Builder(
+          builder: (BuildContext shareContext) {
+            return IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: () {
+                final RenderBox? box = shareContext.findRenderObject() as RenderBox?;
+                Share.share(
+                  "$title\n\n$link",
+                  sharePositionOrigin: box != null ? box.localToGlobal(Offset.zero) & box.size : null,
+                );
+              },
+            );
+          },
+        ),
       ]),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -329,7 +348,6 @@ class EventsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Koyu temada metin rengini otomatik belirlemesi için renk atamalarını kaldırdık
     return Scaffold(
       appBar: AppBar(title: const Text("ETKİNLİK TAKVİMİ")),
       body: ListView.builder(
@@ -343,8 +361,8 @@ class EventsPage extends StatelessWidget {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(events[i]['title']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), // Siyah renk zorlaması kaldırıldı
-                Text(events[i]['desc']!), // Gri renk zorlaması kaldırıldı
+                Text(events[i]['title']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(events[i]['desc']!),
               ],
             ),
           ),
