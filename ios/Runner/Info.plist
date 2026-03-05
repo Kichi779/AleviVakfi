@@ -1,18 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
- "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-
-    <!-- App Identity -->
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
 
-    <!-- Telefonda görünen isim -->
     <key>CFBundleDisplayName</key>
     <string>Uluslararası Alevi Vakfı</string>
 
-    <!-- Sistemsel teknik isim -->
     <key>CFBundleName</key>
     <string>alevi_vakfi</string>
 
@@ -37,7 +32,6 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
 
-    <!-- URL Schemes -->
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>http</string>
@@ -49,27 +43,34 @@
         <string>x</string>
     </array>
 
-    <!-- Network / WebView -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoadsInWebContent</key>
         <true/>
     </dict>
 
-    <!-- UI -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Size en yakın Cemevlerini harita üzerinde göstermek için konumunuza ihtiyaç duyuyoruz.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Size en yakın Cemevlerini harita üzerinde göstermek için konumunuza ihtiyaç duyuyoruz.</string>
+
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>remote-notification</string>
+    </array>
+
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
 
     <key>UIMainStoryboardFile</key>
     <string>Main</string>
 
-    <!-- iPhone Orientation (sadece portrait) -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
 
-    <!-- iPad Orientation (App Store ZORUNLU) -->
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -78,12 +79,10 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
-    <!-- Performance -->
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
 
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
-
 </dict>
 </plist>
