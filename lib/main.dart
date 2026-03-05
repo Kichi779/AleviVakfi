@@ -7,12 +7,49 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:share_plus/share_plus.dart';
 
+// --- YENİ EKLENEN NATIVE PAKETLER ---
+import 'package:table_calendar/table_calendar.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+// --- ONESIGNAL PAKETİ ---
+import 'package:onesignal_flutter/onesignal_flutter.dart';
+
+// --- BİLDİRİM KURULUMU (Yerel Hatırlatıcılar İçin) ---
+final FlutterLocalNotificationsPlugin localNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Hive Veritabanı Başlatma
   await Hive.initFlutter();
   await Hive.openBox('settings');
   await Hive.openBox('cache');
   await Hive.openBox('favorites');
+
+  // Yerel Bildirim Başlatma (Takvim hatırlatıcıları için)
+  const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true
+  );
+  const InitializationSettings initSettings = InitializationSettings(android: androidInit, iOS: iosInit);
+  await localNotificationsPlugin.initialize(initSettings);
+
+  // --- ONESIGNAL BAŞLATMA KODLARI ---
+  try {
+    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+    // Kendi OneSignal App ID'n
+    OneSignal.initialize("0e1426f3-843b-4e98-8fa2-87ee35839a88");
+    // Uygulama açıldığında bildirim izni iste
+    OneSignal.Notifications.requestPermission(true);
+  } catch (e) {
+    debugPrint("OneSignal başlatılamadı: $e");
+  }
+
   runApp(const MyApp());
 }
 
@@ -20,13 +57,13 @@ void main() async {
 
 String fixEncoding(String text) {
   return text
-      .replaceAll("&#8217;", "'")
-      .replaceAll("&#8211;", "-")
-      .replaceAll("&#8220;", "\"")
-      .replaceAll("&#8221;", "\"")
-      .replaceAll("&amp;", "&")
-      .replaceAll("&nbsp;", " ")
-      .replaceAll(RegExp(r'ngg_shortcode_\d+_placeholder'), '') // image_1771c2.png temizliği
+      .replaceAll("’", "'")
+      .replaceAll("–", "-")
+      .replaceAll("“", "\"")
+      .replaceAll("”", "\"")
+      .replaceAll("&", "&")
+      .replaceAll(" ", " ")
+      .replaceAll(RegExp(r'ngg_shortcode_\d+_placeholder'), '')
       .trim();
 }
 
@@ -149,13 +186,29 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _currentIndex = 0;
+  int _currentIndex = 2; // Başlangıçta WebView açılsın (Tam Merkez)
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions(); // Apple için konum izinleri
+  }
+
+  void _requestPermissions() async {
+    try {
+      // Bildirim iznini artık OneSignal main() içinde alıyor. Sadece konumu alıyoruz.
+      await Geolocator.requestPermission();
+    } catch(e) {
+      debugPrint("İzin hatası: $e");
+    }
+  }
+
   final _pages = [
-    const NewsPage(),      // Duyurular
-    const FavoritesPage(), // Favoriler
-    const WebViewPage(),   // TAM ORTA: Vakıf Web
-    const EventsPage(),    // Takvim
-    const SettingsPage(),  // Ayarlar
+    const NewsPage(),          // 0: Duyurular
+    const CemeviFinderPage(),  // 1: Cemevi Bulucu (Native Harita)
+    const WebViewPage(),       // 2: VAKIF WEB (Merkezde)
+    const EventsPage(),        // 3: Etkinlik Takvimi (Native Hatırlatıcı)
+    const SettingsPage(),      // 4: Ayarlar
   ];
 
   @override
@@ -167,9 +220,9 @@ class _MainShellState extends State<MainShell> {
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.campaign), label: "Duyurular"),
-          NavigationDestination(icon: Icon(Icons.bookmark), label: "Favoriler"),
-          NavigationDestination(icon: Icon(Icons.public), label: "Vakıf Web"), // Merkez
-          NavigationDestination(icon: Icon(Icons.event), label: "Takvim"),
+          NavigationDestination(icon: Icon(Icons.map), label: "Cemevi"),
+          NavigationDestination(icon: Icon(Icons.public, size: 30, color: Colors.red), label: "Vakıf Web"),
+          NavigationDestination(icon: Icon(Icons.calendar_month), label: "Takvim"),
           NavigationDestination(icon: Icon(Icons.settings), label: "Ayarlar"),
         ],
       ),
@@ -225,6 +278,12 @@ class _NewsPageState extends State<NewsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("VAKIF DUYURULARI"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmarks),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())),
+          )
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -278,7 +337,7 @@ class _NewsPageState extends State<NewsPage> {
   }
 }
 
-/* ---------------- HABER DETAY (KARAKTER FIX VE IOS SHARE FIX) ---------------- */
+/* ---------------- HABER DETAY ---------------- */
 
 class PostDetailPage extends StatefulWidget {
   final dynamic post;
@@ -335,38 +394,143 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 }
 
-/* ---------------- ETKİNLİK TAKVİMİ (KARANLIK MOD FIX) ---------------- */
+/* ---------------- CEMEVİ BULUCU (NATIVE HARİTA) ---------------- */
 
-class EventsPage extends StatelessWidget {
-  const EventsPage({super.key});
+class CemeviFinderPage extends StatefulWidget {
+  const CemeviFinderPage({super.key});
+  @override
+  State<CemeviFinderPage> createState() => _CemeviFinderPageState();
+}
 
-  final List<Map<String, String>> events = const [
-    {"date": "20 Mart 2026", "title": "Nevruz Bayramı Kutlaması", "desc": "Nevruz cemi ve lokma paylaşımı."},
-    {"date": "15 Nisan 2026", "title": "Kültür Paneli", "desc": "Alevi kültürü üzerine panel düzenlenecektir."},
-    {"date": "06 Mayıs 2026", "title": "Hıdırellez Etkinliği", "desc": "Baharı hep birlikte karşılıyoruz."},
+class _CemeviFinderPageState extends State<CemeviFinderPage> {
+  final MapController _mapController = MapController();
+  LatLng _center = const LatLng(51.1657, 10.4515); // Almanya Merkez
+
+  final List<Map<String, dynamic>> cemevleri = [
+    {"ad": "Berlin Cemevi", "lat": 52.5200, "lng": 13.4050},
+    {"ad": "Köln Cemevi", "lat": 50.9375, "lng": 6.9603},
+    {"ad": "Frankfurt Cemevi", "lat": 50.1109, "lng": 8.6821},
+    {"ad": "Stuttgart Cemevi", "lat": 48.7758, "lng": 9.1829},
   ];
+
+  Future<void> _findMe() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+    Position position = await Geolocator.getCurrentPosition();
+    setState(() => _center = LatLng(position.latitude, position.longitude));
+    _mapController.move(_center, 10.0);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("ETKİNLİK TAKVİMİ")),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: events.length,
-        itemBuilder: (context, i) => Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: const Icon(Icons.event, color: Colors.red),
-            title: Text(events[i]['date']!, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(events[i]['title']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text(events[i]['desc']!),
-              ],
-            ),
+      appBar: AppBar(title: const Text("YAKINDAKİ CEMEVLERİ")),
+      body: FlutterMap(
+        mapController: _mapController,
+        options: MapOptions(initialCenter: _center, initialZoom: 6.0),
+        children: [
+          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.alevivakfi.app'),
+          MarkerLayer(
+            markers: cemevleri.map((c) => Marker(
+              point: LatLng(c['lat'], c['lng']), width: 50, height: 50,
+              child: GestureDetector(
+                onTap: () {
+                  showModalBottomSheet(
+                      context: context,
+                      builder: (context) => Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(c['ad'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 20),
+                            ElevatedButton.icon(
+                                icon: const Icon(Icons.directions),
+                                label: const Text("Yol Tarifi Al"),
+                                onPressed: () {
+                                  final url = "https://www.google.com/maps/search/?api=1&query=${c['lat']},${c['lng']}";
+                                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                }
+                            )
+                          ],
+                        ),
+                      )
+                  );
+                },
+                child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+              ),
+            )).toList(),
           ),
-        ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(backgroundColor: Colors.red, foregroundColor: Colors.white, onPressed: _findMe, child: const Icon(Icons.my_location)),
+    );
+  }
+}
+
+/* ---------------- ETKİNLİK TAKVİMİ (NATIVE TABLE CALENDAR) ---------------- */
+
+class EventsPage extends StatefulWidget {
+  const EventsPage({super.key});
+  @override
+  State<EventsPage> createState() => _EventsPageState();
+}
+
+class _EventsPageState extends State<EventsPage> {
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+
+  final Map<DateTime, List<Map<String, String>>> _events = {
+    DateTime.utc(2026, 3, 20): [{"title": "Nevruz Bayramı Kutlaması", "desc": "Nevruz cemi ve lokma paylaşımı."}],
+    DateTime.utc(2026, 4, 15): [{"title": "Kültür Paneli", "desc": "Alevi kültürü üzerine panel düzenlenecektir."}],
+    DateTime.utc(2026, 5, 6): [{"title": "Hıdırellez Etkinliği", "desc": "Baharı hep birlikte karşılıyoruz."}],
+  };
+
+  List<Map<String, String>> _getEventsForDay(DateTime day) {
+    return _events[DateTime.utc(day.year, day.month, day.day)] ?? [];
+  }
+
+  void _setReminder(String eventName) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails('event_id', 'Etkinlikler', importance: Importance.max, priority: Priority.high);
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await localNotificationsPlugin.show(0, "Hatırlatıcı Kuruldu!", "$eventName için bildirim alacaksınız.", platformDetails);
+    if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cihazınıza hatırlatıcı kuruldu.")));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedEvents = _getEventsForDay(_selectedDay ?? _focusedDay);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("ETKİNLİK TAKVİMİ")),
+      body: Column(
+        children: [
+          TableCalendar(
+            firstDay: DateTime.utc(2024, 1, 1), lastDay: DateTime.utc(2030, 12, 31), focusedDay: _focusedDay,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            onDaySelected: (selectedDay, focusedDay) { setState(() { _selectedDay = selectedDay; _focusedDay = focusedDay; }); },
+            eventLoader: _getEventsForDay,
+            calendarStyle: const CalendarStyle(markerDecoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: selectedEvents.length,
+              itemBuilder: (context, i) => Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.event, color: Colors.red),
+                  title: Text(selectedEvents[i]['title']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(selectedEvents[i]['desc']!),
+                  trailing: IconButton(icon: const Icon(Icons.alarm_add, color: Colors.blue), onPressed: () => _setReminder(selectedEvents[i]['title']!)),
+                ),
+              ),
+            ),
+          )
+        ],
       ),
     );
   }
@@ -440,6 +604,20 @@ class SettingsPage extends StatelessWidget {
               title: const Text("Koyu Tema"), secondary: const Icon(Icons.dark_mode),
               value: b.get('isDarkTheme', defaultValue: false), onChanged: (v) => b.put('isDarkTheme', v),
             ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.notifications_active, color: Colors.red),
+            title: const Text("Anlık Bildirimler (Push)"),
+            subtitle: const Text("Yeni içerikler eklendiğinde haber ver"),
+            trailing: Switch(value: true, onChanged: (val) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bildirim tercihleri güncellendi.")));
+            }),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bookmarks, color: Colors.red),
+            title: const Text("Kaydedilen İçerikler"),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())),
           ),
           const Divider(),
           const Padding(padding: EdgeInsets.all(16), child: Text("Sosyal Medya", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
